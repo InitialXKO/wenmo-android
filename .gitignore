@@ -9,3 +9,9 @@ signing/
 *.iml
 .DS_Store
 engine/target/
+.cxx
+.cxx/
+.cxx/**
+app/.cxx
+app/.cxx/
+app/.cxx/**

@@ -27,6 +27,7 @@ import ink.wenmo.ime.data.SymbolData;
 import ink.wenmo.ime.engine.InputEngine;
 import ink.wenmo.ime.engine.LocalInputEngine;
 import ink.wenmo.ime.engine.RustInputEngine;
+import ink.wenmo.ime.engine.SimeEngine;
 
 public final class WenmoInputMethodService extends InputMethodService {
     private InputEngine engine;
@@ -105,7 +106,7 @@ public final class WenmoInputMethodService extends InputMethodService {
     }
 
     @Override public View onCreateInputView() {
-        if (engine == null) engine = new RustInputEngine(getApplicationContext());
+        if (engine == null) engine = new SimeEngine(getApplicationContext());
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(4), dp(4), dp(4), dp(6));
@@ -162,7 +163,7 @@ public final class WenmoInputMethodService extends InputMethodService {
 
     @Override public void onStartInput(android.view.inputmethod.EditorInfo info, boolean restarting) {
         super.onStartInput(info, restarting);
-        if (engine == null) engine = new RustInputEngine(getApplicationContext());
+        if (engine == null) engine = new SimeEngine(getApplicationContext());
         engine.clear();
         numberComposition.setLength(0);
         int inputClass = info.inputType & InputType.TYPE_MASK_CLASS;

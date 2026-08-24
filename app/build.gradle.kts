@@ -36,6 +36,18 @@ android {
         targetSdk = 36
         versionCode = 4
         versionName = "0.4.0"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags("-std=c++20")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 
     signingConfigs {
