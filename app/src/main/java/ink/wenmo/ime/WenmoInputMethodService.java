@@ -1,28 +1,72 @@
 package ink.wenmo.ime;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.inputmethodservice.InputMethodService;
 import android.view.Gravity;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.inputmethod.InputConnection;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import ink.wenmo.ime.engine.InputEngine;
 import ink.wenmo.ime.engine.LocalInputEngine;
 
 public final class WenmoInputMethodService extends InputMethodService {
     private InputEngine engine;
+    private ink.wenmo.ime.clipboard.ClipboardManager clipboardHistoryManager;
+    private ClipboardManager systemClipboardManager;
+    private ClipboardManager.OnPrimaryClipChangedListener clipListener;
+
     private LinearLayout candidates;
     private LinearLayout keyboardPanel;
     private TextView composition;
     private Button scriptToggle;
     private KeyboardMode keyboardMode = KeyboardMode.ALPHABETIC;
 
-    private enum KeyboardMode { ALPHABETIC, NUMBER, SYMBOL }
+    public enum KeyboardMode { ALPHABETIC, NUMBER, SYMBOL, CLIPBOARD }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        clipboardHistoryManager = new ink.wenmo.ime.clipboard.ClipboardManager();
+        systemClipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (systemClipboardManager != null) {
+            clipListener = () -> {
+                try {
+                    ClipData primaryClip = systemClipboardManager.getPrimaryClip();
+                    if (primaryClip != null && primaryClip.getItemCount() > 0) {
+                        CharSequence text = primaryClip.getItemAt(0).getText();
+                        if (text != null && !TextUtils.isEmpty(text.toString().trim())) {
+                            clipboardHistoryManager.add(text.toString());
+                            if (keyboardMode == KeyboardMode.CLIPBOARD) {
+                                refresh();
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            };
+            systemClipboardManager.addPrimaryClipChangedListener(clipListener);
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        if (systemClipboardManager != null && clipListener != null) {
+            systemClipboardManager.removePrimaryClipChangedListener(clipListener);
+        }
+        super.onDestroy();
+    }
 
     @Override public View onCreateInputView() {
         if (engine == null) engine = new LocalInputEngine(getApplicationContext());
@@ -45,6 +89,7 @@ public final class WenmoInputMethodService extends InputMethodService {
         composition = new TextView(this);
         composition.setTextSize(16);
         composition.setTextColor(Color.rgb(32, 33, 36));
+        composition.setTypeface(Typeface.DEFAULT_BOLD);
         composition.setGravity(Gravity.CENTER_VERTICAL);
         composition.setPadding(dp(8), 0, dp(6), 0);
         toolbar.addView(composition, new LinearLayout.LayoutParams(-2, dp(42)));
@@ -56,8 +101,9 @@ public final class WenmoInputMethodService extends InputMethodService {
         toolbar.addView(scroller, new LinearLayout.LayoutParams(0, dp(42), 1));
 
         scriptToggle = key("简", v -> toggleScript());
-        toolbar.addView(scriptToggle, fixed(48, 42));
-        toolbar.addView(key("⌄", v -> requestHideSelf(0)), fixed(48, 42));
+        toolbar.addView(scriptToggle, fixed(44, 42));
+        toolbar.addView(key("📋", v -> switchKeyboard(keyboardMode == KeyboardMode.CLIPBOARD ? KeyboardMode.ALPHABETIC : KeyboardMode.CLIPBOARD)), fixed(44, 42));
+        toolbar.addView(key("⌄", v -> requestHideSelf(0)), fixed(44, 42));
         root.addView(toolbar);
 
         keyboardPanel = new LinearLayout(this);
@@ -131,6 +177,7 @@ public final class WenmoInputMethodService extends InputMethodService {
             case ALPHABETIC -> buildAlphabeticKeyboard();
             case NUMBER -> buildNumberKeyboard();
             case SYMBOL -> buildSymbolKeyboard();
+            case CLIPBOARD -> buildClipboardPanel();
         }
     }
 
@@ -143,12 +190,12 @@ public final class WenmoInputMethodService extends InputMethodService {
             keyboardPanel.addView(keyRow);
         }
         LinearLayout bottom = row();
-        bottom.addView(key("🌐", v -> switchToNextInputMethod(false)), fixed(48, 48));
-        bottom.addView(key("123", v -> switchKeyboard(KeyboardMode.NUMBER)), fixed(52, 48));
-        bottom.addView(key("符", v -> switchKeyboard(KeyboardMode.SYMBOL)), fixed(48, 48));
+        bottom.addView(key("🌐", v -> switchToNextInputMethod(false)), fixed(46, 48));
+        bottom.addView(key("123", v -> switchKeyboard(KeyboardMode.NUMBER)), fixed(50, 48));
+        bottom.addView(key("符", v -> switchKeyboard(KeyboardMode.SYMBOL)), fixed(46, 48));
         bottom.addView(key("空格", v -> space()), weightedKey());
-        bottom.addView(key("⌫", v -> backspace()), fixed(54, 48));
-        bottom.addView(key("回车", v -> enter()), fixed(62, 48));
+        bottom.addView(key("⌫", v -> backspace()), fixed(52, 48));
+        bottom.addView(key("回车", v -> enter()), fixed(60, 48));
         keyboardPanel.addView(bottom);
     }
 
@@ -180,6 +227,51 @@ public final class WenmoInputMethodService extends InputMethodService {
         keyboardPanel.addView(bottom);
     }
 
+    private void buildClipboardPanel() {
+        ScrollView scrollView = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+        var history = clipboardHistoryManager.getHistory();
+        if (history.isEmpty()) {
+            TextView emptyView = new TextView(this);
+            emptyView.setText("剪贴板空空如也");
+            emptyView.setTextColor(Color.GRAY);
+            emptyView.setGravity(Gravity.CENTER);
+            emptyView.setPadding(0, dp(32), 0, dp(32));
+            list.addView(emptyView, new LinearLayout.LayoutParams(-1, -2));
+        } else {
+            for (int i = 0; i < history.size(); i++) {
+                final String text = history.get(i).getText();
+                Button clipItem = new Button(this);
+                clipItem.setText(text);
+                clipItem.setAllCaps(false);
+                clipItem.setTextSize(14);
+                clipItem.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                clipItem.setPadding(dp(12), dp(8), dp(12), dp(8));
+                clipItem.setOnClickListener(v -> {
+                    commitRaw(text);
+                    switchKeyboard(KeyboardMode.ALPHABETIC);
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+                lp.setMargins(0, dp(2), 0, dp(2));
+                list.addView(clipItem, lp);
+            }
+        }
+        scrollView.addView(list);
+
+        LinearLayout bottomControl = row();
+        bottomControl.addView(key("清空剪贴板", v -> {
+            clipboardHistoryManager.clear();
+            showKeyboard(KeyboardMode.CLIPBOARD);
+        }), new LinearLayout.LayoutParams(0, dp(44), 1));
+        bottomControl.addView(key("返回", v -> switchKeyboard(KeyboardMode.ALPHABETIC)), fixed(80, 44));
+
+        keyboardPanel.addView(scrollView, new LinearLayout.LayoutParams(-1, dp(150)));
+        keyboardPanel.addView(bottomControl);
+    }
+
     private void addTextKeyRow(String... labels) {
         LinearLayout keyRow = row();
         for (String label : labels) {
@@ -197,7 +289,8 @@ public final class WenmoInputMethodService extends InputMethodService {
         if (composition == null || candidates == null) return;
         if (keyboardMode == KeyboardMode.ALPHABETIC) composition.setText(engine.composition());
         else if (keyboardMode == KeyboardMode.NUMBER) composition.setText("数字");
-        else composition.setText("常用符号");
+        else if (keyboardMode == KeyboardMode.SYMBOL) composition.setText("常用符号");
+        else composition.setText("剪贴板");
         scriptToggle.setText(engine.isTraditional() ? "繁" : "简");
         scriptToggle.setVisibility(keyboardMode == KeyboardMode.ALPHABETIC ? View.VISIBLE : View.INVISIBLE);
         candidates.removeAllViews();
