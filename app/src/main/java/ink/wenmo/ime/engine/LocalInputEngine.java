@@ -21,7 +21,9 @@ public final class LocalInputEngine implements InputEngine {
     private boolean traditional;
 
     public LocalInputEngine(Context context) {
-        loadDictionary(context);
+        if (context != null) {
+            loadDictionary(context);
+        }
     }
 
     @Override public void type(char value) {

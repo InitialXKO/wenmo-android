@@ -26,6 +26,8 @@ import ink.wenmo.ime.calculator.CalculatorEngine;
 import ink.wenmo.ime.data.SymbolData;
 import ink.wenmo.ime.engine.InputEngine;
 import ink.wenmo.ime.engine.LocalInputEngine;
+import ink.wenmo.ime.engine.RustInputEngine;
+import ink.wenmo.ime.engine.SimeEngine;
 
 public final class WenmoInputMethodService extends InputMethodService {
     private InputEngine engine;
@@ -35,6 +37,7 @@ public final class WenmoInputMethodService extends InputMethodService {
 
     private LinearLayout candidates;
     private LinearLayout keyboardPanel;
+    private LinearLayout toolsBar;
     private TextView composition;
     private Button scriptToggle;
     private KeyboardMode keyboardMode = KeyboardMode.ALPHABETIC;
@@ -103,7 +106,7 @@ public final class WenmoInputMethodService extends InputMethodService {
     }
 
     @Override public View onCreateInputView() {
-        if (engine == null) engine = new LocalInputEngine(getApplicationContext());
+        if (engine == null) engine = new SimeEngine(getApplicationContext());
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(4), dp(4), dp(4), dp(6));
@@ -134,14 +137,21 @@ public final class WenmoInputMethodService extends InputMethodService {
         scroller.addView(candidates);
         toolbar.addView(scroller, new LinearLayout.LayoutParams(0, dp(42), 1));
 
-        scriptToggle = key("简", v -> toggleScript());
-        toolbar.addView(scriptToggle, fixed(40, 42));
-        toolbar.addView(key("📋", v -> switchKeyboard(keyboardMode == KeyboardMode.CLIPBOARD ? KeyboardMode.ALPHABETIC : KeyboardMode.CLIPBOARD)), fixed(38, 42));
-        toolbar.addView(key("✏️", v -> switchKeyboard(keyboardMode == KeyboardMode.EDIT ? KeyboardMode.ALPHABETIC : KeyboardMode.EDIT)), fixed(38, 42));
-        toolbar.addView(key("💬", v -> switchKeyboard(keyboardMode == KeyboardMode.QUICK_PHRASE ? KeyboardMode.ALPHABETIC : KeyboardMode.QUICK_PHRASE)), fixed(38, 42));
-        toolbar.addView(key("😀", v -> switchKeyboard(keyboardMode == KeyboardMode.EMOJI ? KeyboardMode.ALPHABETIC : KeyboardMode.EMOJI)), fixed(38, 42));
+        toolbar.addView(key("⋯", v -> toggleToolsBar()), fixed(38, 42));
         toolbar.addView(key("⌄", v -> requestHideSelf(0)), fixed(38, 42));
         root.addView(toolbar);
+
+        toolsBar = row();
+        toolsBar.setVisibility(View.GONE);
+        toolsBar.setPadding(dp(2), dp(2), dp(2), dp(2));
+
+        scriptToggle = key("简", v -> toggleScript());
+        toolsBar.addView(scriptToggle, fixed(44, 38));
+        toolsBar.addView(key("📋 剪贴板", v -> switchKeyboard(keyboardMode == KeyboardMode.CLIPBOARD ? KeyboardMode.ALPHABETIC : KeyboardMode.CLIPBOARD)), weightedKey());
+        toolsBar.addView(key("✏️ 编辑", v -> switchKeyboard(keyboardMode == KeyboardMode.EDIT ? KeyboardMode.ALPHABETIC : KeyboardMode.EDIT)), weightedKey());
+        toolsBar.addView(key("💬 常用语", v -> switchKeyboard(keyboardMode == KeyboardMode.QUICK_PHRASE ? KeyboardMode.ALPHABETIC : KeyboardMode.QUICK_PHRASE)), weightedKey());
+        toolsBar.addView(key("😀 Emoji", v -> switchKeyboard(keyboardMode == KeyboardMode.EMOJI ? KeyboardMode.ALPHABETIC : KeyboardMode.EMOJI)), weightedKey());
+        root.addView(toolsBar);
 
         keyboardPanel = new LinearLayout(this);
         keyboardPanel.setOrientation(LinearLayout.VERTICAL);
@@ -153,7 +163,7 @@ public final class WenmoInputMethodService extends InputMethodService {
 
     @Override public void onStartInput(android.view.inputmethod.EditorInfo info, boolean restarting) {
         super.onStartInput(info, restarting);
-        if (engine == null) engine = new LocalInputEngine(getApplicationContext());
+        if (engine == null) engine = new SimeEngine(getApplicationContext());
         engine.clear();
         numberComposition.setLength(0);
         int inputClass = info.inputType & InputType.TYPE_MASK_CLASS;
@@ -517,6 +527,12 @@ public final class WenmoInputMethodService extends InputMethodService {
         keyboardPanel.addView(bottomControl);
     }
 
+    private void toggleToolsBar() {
+        if (toolsBar != null) {
+            toolsBar.setVisibility(toolsBar.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+        }
+    }
+
     private void toggleScript() {
         engine.setTraditional(!engine.isTraditional());
         refresh();
@@ -532,21 +548,25 @@ public final class WenmoInputMethodService extends InputMethodService {
         else if (keyboardMode == KeyboardMode.QUICK_PHRASE) composition.setText("常用语");
         else if (keyboardMode == KeyboardMode.EMOJI) composition.setText("Emoji");
         scriptToggle.setText(engine.isTraditional() ? "繁" : "简");
-        scriptToggle.setVisibility(keyboardMode == KeyboardMode.ALPHABETIC ? View.VISIBLE : View.INVISIBLE);
 
         candidates.removeAllViews();
         if (keyboardMode == KeyboardMode.ALPHABETIC) {
             for (String candidate : engine.candidates()) {
-                candidates.addView(key(candidate, v -> select(candidate)), fixed(64, 42));
+                Button btn = key(candidate, v -> select(candidate));
+                btn.setPadding(dp(10), 0, dp(10), 0);
+                btn.setMinimumWidth(dp(44));
+                candidates.addView(btn, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(42)));
             }
         } else if (keyboardMode == KeyboardMode.NUMBER && numberComposition.length() > 0) {
             String evalResult = CalculatorEngine.evaluate(numberComposition.toString());
             if (evalResult != null) {
-                candidates.addView(key("= " + evalResult, v -> {
+                Button btn = key("= " + evalResult, v -> {
                     commitRaw(evalResult);
                     numberComposition.setLength(0);
                     refresh();
-                }), fixed(120, 42));
+                });
+                btn.setPadding(dp(10), 0, dp(10), 0);
+                candidates.addView(btn, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(42)));
             }
         }
     }

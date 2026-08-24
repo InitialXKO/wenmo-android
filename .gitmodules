@@ -1,0 +1,3 @@
+[submodule "require/Sime"]
+	path = require/Sime
+	url = https://github.com/Ismantic/Sime.git
