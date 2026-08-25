@@ -96,6 +96,7 @@ public class SimeEngine implements InputEngine {
         return ready ? nativeContextSize() : 2;
     }
 
+    @Override
     public void resetCaches() {
         if (ready) nativeResetCaches();
     }
@@ -109,10 +110,38 @@ public class SimeEngine implements InputEngine {
         ready = false;
     }
 
+    @Override
     public DecodeResult[] decodeSentence(String input, int extra) {
         if (!ready) return new DecodeResult[0];
         int count = nativeDecodeSentence(input, extra);
         return readResults(count);
+    }
+
+    @Override
+    public DecodeResult[] decodeNumSentence(String prefixLetters, String digits, int extra) {
+        if (!ready) return new DecodeResult[0];
+        int count = nativeDecodeNumSentence(prefixLetters != null ? prefixLetters : "", digits, extra);
+        return readResults(count);
+    }
+
+    @Override
+    public DecodeResult[] nextTokens(int[] contextIds, int limit, boolean enOnly) {
+        if (!ready || contextIds == null || contextIds.length == 0) return new DecodeResult[0];
+        int count = nativeNextTokens(contextIds, limit, enOnly);
+        return readResults(count);
+    }
+
+    @Override
+    public DecodeResult[] getTokens(String prefix, int limit, boolean enOnly) {
+        if (!ready || prefix == null || prefix.isEmpty()) return new DecodeResult[0];
+        int count = nativeGetTokens(prefix, limit, enOnly);
+        return readResults(count);
+    }
+
+    @Override
+    public String[] t9PinyinSyllables(String digits, int limit) {
+        if (!ready || digits == null || digits.isEmpty() || limit <= 0) return new String[0];
+        return nativeT9PinyinSyllables(digits, limit);
     }
 
     @Override
@@ -186,6 +215,7 @@ public class SimeEngine implements InputEngine {
         return traditional;
     }
 
+    @Override
     public void learnUserSentence(int[] context, int[] tokens) {
         if (!ready || tokens == null || tokens.length == 0) return;
         nativeLearnUserSentence(context != null ? context : new int[0], tokens);
@@ -194,6 +224,7 @@ public class SimeEngine implements InputEngine {
         }
     }
 
+    @Override
     public void flushUserSentence() {
         if (!ready || pendingUserSentenceSaves == 0 || userSentencePath == null) return;
         if (!nativeSaveUserSentence(userSentencePath)) {
